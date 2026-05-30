@@ -242,6 +242,7 @@ main.mode-profile #profileView{display:block;animation:povPop .4s ease;}
 			<div class="pov-card" id="card">
 				<div class="pov-card-top">
 					<span class="pov-card-eyebrow">Proof of BulkTrade</span>
+					<a class="pov-card-src" id="cSrc" href="https://ogbulk.xyz" target="_blank" rel="noopener">ogbulk.xyz</a>
 				</div>
 				<div class="pov-card-id">
 					<span class="pov-cavatar" id="cAvatar">@</span>
@@ -286,6 +287,7 @@ main.mode-profile #profileView{display:block;animation:povPop .4s ease;}
 				<a class="pov-btn pov-btn-ghost" href="https://x.com/bulktrade" target="_blank" rel="noopener">@bulktrade</a>
 			</div>
 			<div class="pov-prof-snap" id="profileSnap">
+				<a class="pov-prof-src" href="https://ogbulk.xyz" target="_blank" rel="noopener">ogbulk.xyz</a>
 				<div class="pov-prof-head">
 					<span class="pov-prof-avatar" id="pAvatar">@</span>
 					<div class="pov-prof-id">
@@ -502,7 +504,7 @@ main.mode-profile #profileView{display:block;animation:povPop .4s ease;}
 		document.getElementById('cChart').innerHTML=chartFor(u);
 		document.getElementById('cFirst').textContent='FIRST POST · '+dateLabel(u.first);
 		var txt='I\u2019ve generated '+compact(u.v)+' views helping @bulktrade grow on X 📈\n\nRank #'+rank+' on Proof of BULKTRADE. Check yours 👇';
-		document.getElementById('shareX').href='https://twitter.com/intent/tweet?text='+esc(txt)+'&url='+esc('https://x.com/bulktrade');
+		document.getElementById('shareX').href='https://twitter.com/intent/tweet?text='+esc(txt)+'&url='+esc('https://ogbulk.xyz');
 		var r=document.getElementById('result');r.classList.remove('show');void r.offsetWidth;r.classList.add('show');
 	}
 	function mergeRank(u){board.sort(function(a,b){return b.v-a.v;});return board.filter(function(x){return x.v>u.v;}).length+1;}
@@ -548,7 +550,7 @@ main.mode-profile #profileView{display:block;animation:povPop .4s ease;}
 		document.getElementById('pReply').textContent=fmt(u.rep);
 		renderPosts(u);
 		var txt='@'+u.h+' has generated '+compact(u.v)+' views helping @bulktrade grow on X 📈\n\nRank #'+rank+' on Proof of BULKTRADE 👇';
-		document.getElementById('pShareX').href='https://twitter.com/intent/tweet?text='+esc(txt)+'&url='+esc('https://x.com/bulktrade');
+		document.getElementById('pShareX').href='https://twitter.com/intent/tweet?text='+esc(txt)+'&url='+esc('https://ogbulk.xyz');
 	}
 	function openProfile(handle){
 		handle=String(handle).replace(/^@+/,'');
