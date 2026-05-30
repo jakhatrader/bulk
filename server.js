@@ -131,7 +131,7 @@ function sinceFloorClause() {
 }
 
 /* ---------------- persistent index ---------------- */
-let store = { tweets: {}, oldestCursor: '', backfillDone: false, newestTime: 0, oldestTime: 0, windowUntil: 0, windowOldestRaw: 0, backfillVersion: 0, count: 0, updatedAt: 0 };
+let store = { tweets: {}, oldestCursor: '', backfillDone: false, newestTime: 0, count: 0, updatedAt: 0 };
 
 /* ---- Redis REST helpers ---- */
 async function redisCmd(args) {
@@ -179,14 +179,6 @@ async function loadStore() {
 				store = Object.assign(store, saved);
 				store.count = Object.keys(store.tweets).length;
 				console.log('[store] restored ' + store.count + ' tweets (backfill ' + (store.backfillDone ? 'complete' : 'in progress') + ')');
-				if (store.backfillVersion !== 2) {
-					store.backfillVersion = 2;
-					store.backfillDone = false;
-					store.oldestCursor = '';
-					store.windowUntil = 0;
-					store.windowOldestRaw = 0;
-					console.log('[store] enabled windowed backfill (v2) -- resuming history fetch past previous limit');
-				}
 			}
 		}
 	} catch (e) { console.warn('[store] load failed:', e.message); }
@@ -216,45 +208,23 @@ function ingest(tweets) {
 		if (!store.tweets[r.id]) added++;
 		store.tweets[r.id] = r; // overwrite keeps view/like counts fresh
 		if (r.t && r.t > store.newestTime) store.newestTime = r.t;
-		if (r.t && (!store.oldestTime || r.t < store.oldestTime)) store.oldestTime = r.t;
 	}
 	return added;
 }
 
-// Pull a chunk of older history (resumable, windowed). Returns tweets added.
-// Walks backward in time windows using until_time so we are not limited by the
-// provider's cursor depth (~7 months). Steps down to SINCE_DATE or the true bottom.
+// Pull a chunk of older history (resumable). Returns tweets added.
 async function backfillStep() {
 	if (store.backfillDone) return 0;
-	// Open/resume a window: when none is active, seed until_time just below the TRUE
-	// oldest stored tweet (recompute from data; do NOT trust store.oldestTime, which
-	// incrementalStep may have raised to a recent value).
-	if (!store.oldestCursor && !store.windowUntil) {
-		let __mn = 0;
-		for (const id in store.tweets) { const tt = store.tweets[id].t; if (tt && (!__mn || tt < __mn)) __mn = tt; }
-		if (__mn) { store.oldestTime = __mn; store.windowUntil = Math.floor(__mn / 1000) - 1; store.windowOldestRaw = 0; }
-	}
+	const query = TERMS + ' -filter:retweets' + sinceFloorClause();
 	let cursor = store.oldestCursor || '';
 	let pages = 0, added = 0;
 	while (pages < BACKFILL_PAGES_PER_RUN) {
-		const until = store.windowUntil || 0;
-		const query = TERMS + ' -filter:retweets' + sinceFloorClause() + (until ? ' until_time:' + until : '');
-		const freshWindow = !cursor;
 		const page = await searchPage(query, cursor);
 		added += ingest(page.tweets);
-		for (const t of page.tweets) { const ts = Date.parse(t.createdAt); if (!isNaN(ts) && (!store.windowOldestRaw || ts < store.windowOldestRaw)) store.windowOldestRaw = ts; }
 		cursor = page.cursor;
 		store.oldestCursor = cursor;
 		pages++;
-		if (freshWindow && page.tweets.length === 0) { store.backfillDone = true; break; } // no older tweets exist -> real bottom
-		if (!page.hasNext || !cursor) {
-			// Current window exhausted -> open an older window below the oldest tweet seen.
-			const stepFromMs = store.windowOldestRaw || (until ? until * 1000 : store.oldestTime);
-			store.windowUntil = Math.floor(stepFromMs / 1000) - 1;
-			store.windowOldestRaw = 0;
-			store.oldestCursor = '';
-			cursor = '';
-		}
+		if (!page.hasNext || !cursor) { store.backfillDone = true; break; }
 	}
 	if (added || store.backfillDone) saveStore();
 	return added;
@@ -449,6 +419,14 @@ const server = http.createServer(async (req, res) => {
 // full history is in, just refresh on the normal daily cadence.
 (async () => {
 	await loadStore();
+	// Warm the cache from the already-collected index so the very first visitor
+	// gets instant data instead of waiting for a live fetch ("Loading live data…").
+	// Read-only: builds the snapshot in memory; never writes to Redis or the store.
+	try {
+		const warm = buildSnapshot();
+		cache = { at: store.updatedAt || Date.now(), data: warm.data, rankMap: warm.rankMap };
+		console.log('[warm] cache primed from stored index: ' + store.count + ' tweets, ' + (warm.data ? warm.data.totals.users : 0) + ' users');
+	} catch (e) { console.error('[warm] skip:', e.message); }
 	server.listen(PORT, () => console.log('Proof of BULKTRADE on http://localhost:' + PORT + ' — indexing ' + (SINCE_DATE ? 'since ' + SINCE_DATE : 'from the first post') + ', updates every ' + UPDATE_INTERVAL_HOURS + 'h' + (KEY ? '' : ' — PREVIEW (set TWITTERAPI_KEY)')));
 	if (KEY) {
 		refresh();
